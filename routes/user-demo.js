@@ -1,58 +1,59 @@
 const express = require('express');
 const router = express.Router();
 router.use(express.json())
-
-let db = new Map()
-var id = 1
+const conn = require('../db')
 
 
 router.post('/login', function (req, res) {
 
-    const { username, password } = req.body
+    const { email, password } = req.body
 
-    var loginUser = {}
+    conn.query(`SELECT * FROM users WHERE email = ?`, [email],
+        function (err, results) {
 
+            loginUser = results[0]
 
-    db.forEach((user, id) => {
-        if (user.username === username) {
-            loginUser = user
+            if (loginUser && loginUser.password === password) {
+                res.status(200).json({
+                    message: 'Login success'
+                })
+            } else if (loginUser && loginUser.password !== password) {
+                res.status(400).json({
+                    message: 'Password is incorrect'
+                })
+            } else {
+                res.status(404).json({
+                    message: 'User not found'
+                })
+            }
         }
-    })
+    )
 
-
-    function isExsist(obj) {
-        return Object.keys(obj).length !== 0
-    }
-
-    if (isExsist(loginUser)) {
-        if (loginUser.password === password) {
-            res.json({
-                message: 'Login success'
-            })
-        } else {
-            res.status(401).json({
-                message: 'password is wrong'
-            })
-        }
-    } else {
-        res.status(404).json({
-            message: 'User not found'
-        })
-    }
+    
 }
 )
 
 router.post('/join', function (req, res) {
-    let { username, password } = req.body
+    let { email, password, name, contact } = req.body
 
-    if (req.body.username === undefined) {
-        res.status(400).json('Bad request')
-    } else {
-        db.set(username, req.body)
-        res.status(201).json({
-            message: `User ${username} created`
-        })
-    }
+    conn.query(
+        `SELECT * FROM users WHERE email = ?`, email,
+        function (err, results) {
+            if (results.length > 0) {
+                res.status(409).json({
+                    message: 'User already exists'
+                })
+            } else {
+                conn.query(`INSERT INTO users (email, password, name, contact) VALUES (?, ?, ?, ?)`,
+                    [email, password, name, contact],
+                    function (err, results, fields) {
+                        res.status(201).json({
+                            message: 'Join success'
+                        })
+                    })
+            }
+        }
+    );
 
 
 })
@@ -61,29 +62,39 @@ router.post('/join', function (req, res) {
 router.route('/user')
     .get(function (req, res) {
 
-        let { username } = req.body
+        let { email, name } = req.body
+        console.log(email)
+        console.log(name)
 
-        const user = db.get(username)
+        conn.query(
+            `SELECT * FROM users WHERE email = ?`, email,
+            function (err, results) {
+                if (results) {
+                    console.log(results)
+                    res.json(results)
+                } else {
+                    console.log('error')
+                }
+            }
+        );
 
-        if (db.has(username)) {
-            res.json(user)
-        } else {
-            res.status(404).json({
-                message: 'User not found'
-            })
-        }
+
     })
     .delete(function (req, res) {
 
-        let { username } = req.body
+        let { email } = req.body
 
-        if (db.has(username)) {
-            const pusername = db.get(username).username
-            db.delete(id)
-            res.json({message: `User ${pusername} deleted`})
-        } else {
-            res.status(404).send('User not found')
-        }
+        conn.query(`DELETE FROM users Where email = ?`, email,
+            function( err, results) {
+                if (results.affectedRows > 0) {
+                    res.status(200).json({
+                        message: `User ${email} deleted`
+                    })
+                } else {
+                    res.status(404).json(`User ${email} not found`)
+                }
+            }
+        )
     })
 
 module.exports = router;

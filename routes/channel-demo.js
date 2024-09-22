@@ -1,77 +1,96 @@
 const express = require('express')
 const router = express.Router()
 router.use(express.json())
+const conn = require('../db')
 
-let db = new Map()
-var id = 1
 
 router.route('/channels')
     .post(function (req, res) {
-        let { name, description } = req.body
-        let channel = req.body
+        let { name, desc, user_id } = req.body
 
-        if (req.body.name === undefined) {
-            res.status(400).json({
-                message: 'Bad request'
-            })
-        } else {
-            db.set(id++, channel)
-            res.status(201).json({
-                message: `Channel ${name} created`
-            })
-        }
-    }) //channel create
-    .get(function (req, res) {
-        let channelList = []
-        var { username } = req.body
-
-
-        db.forEach((channel, id) => {
-            if (channel.username === username && channel.username !== undefined) {
-                channelList.push({
-                    id: id,
-                    name: channel.name,
-                    description: channel.description,
-                    username: channel.username
+        conn.query(`SELECT * FROM channels WHERE name = ?`, name, function (err, results) {
+            if (results.length) {
+                res.status(409).json({
+                    message: 'Channel already exists'
                 })
+            } else {
+                
+
+
+                conn.query(`INSERT INTO channels (name, desc, user_id) VALUES (?, ?, ?)`, [name, desc, user_id],
+                    function (err, results, fields) {
+                        res.status(201).json({
+                            message: `Channel ${name} created`
+                        })
+                    }
+                )
             }
         })
 
-        if (channelList.length === 0) {
-            notFoundchannel()
+
+
+
+    }) //channel create
+    .get(function (req, res) {
+
+        var { user_id } = req.body
+
+        if (user_id) {
+            conn.query(`SELECT * FROM channels WHERE user_id = ?`, user_id,
+                function (err, results) {
+                    if (results.length) {
+                        res.status(200).json(results)
+                    } else {
+                        notFoundchannel(res)
+                    }
+                }
+            )
         } else {
-            res.status(200).json(channelList)
+            res.status(400).json({
+                message: 'Bad request'
+            }).end()
         }
+        
+
+        
+
     }) //channel list
 
 router.route('/channel/:id')
     .delete(function (req, res) {
-        let id = req.params.id
-        id = parseInt(id)
+        let {channel_id }= req.params
 
-        var channel = db.get(id)
-
-        if (channel) {
-            db.delete(id)
-
-            res.status(200).json({
-                message: `Channel ${channel.name} deleted`
-            })
-        } else {
-            notFoundchannel()
-        }
+        conn.query(`SELECT * FROM channels WHERE id = ?`, channel_id, 
+            function (err, results) {
+                if (results.length) {
+                    conn.query(`DELETE FROM channels WHERE id = ?`, id,
+                        function (err, results) {
+                            res.status(200).json({
+                                message: 'Channel deleted'
+                            })
+                        }
+                    )
+                } else {
+                    notFoundchannel(res)
+                }
+            }
+        )
     }) //single channel delete 
     .get(function (req, res) {
-        let id = req.params.id
+        let { id } = req.params
         id = parseInt(id)
 
-        var channel = db.get(id)
+        conn.query(`SELECT * FROM channels WHERE id = ?`, id,
+            function (err, results) {
 
-        if (channel) {
-            res.json(channel)
-        } else {
-            notFoundchannel()
-        }
+                if (results.length) {
+                    res.status(200).json(results)
+                } else {
+                    notFoundchannel(res)
+                }
+            }
+        )
+
     }) //channle detail
     .put(function (req, res) {
         let { id } = req.params
@@ -97,7 +116,7 @@ router.route('/channel/:id')
         }
     }) //channel modify
 
-function notFoundchannel() {
+function notFoundchannel(res) {
     res.status(404).json({
         message: 'Channel not found'
     })
